@@ -15,8 +15,8 @@
 .def external_button = r20 ;registrador responsável por setar o botão externo de chamada do elevador
 .def display_1 = r21 ;display de 7 segmentos externo
 .def display_2 = r22 ;display de 7 segmentos interno
-.def timer_temp = r23
-.def timer_aux = r24
+.def timer_temp = r23 ;serve para setar o valor do TOP quando definimos o tempo de contagem
+.def timer_aux = r24 ;ajuda a contar cada 1ms que passa para conseguirmos interromper no momento adequado para cada interrupção
 
 define_timer:
 	#define CLOCK 16.0e6
@@ -91,27 +91,34 @@ reset:
 		rjmp external_panel
 
 	internal_panel:
-		
+		;Aqui que colocamos o andar
+		;[0|0|0|0|0|0|0|0] botões
+		;[0|0|0|0|1|1|1|1] 4 primeiros para os andares
+		;[0|0|1|0|0|0|0|0] fechar a porta
+		;a ausência do fechamento da porta indica que a porta está aberta
+
+		nop ;quando setar o valor no PIND já pode dar play no botão verde daqui
+		nop
+		in internal_floor_button, PIND ;serve como o controlador interno do elevador como o Igor comentou acima
+		nop 
+
 		rjmp interruptions
-		
-		internal_panel_buttons:
-			nop
-			nop
-			in internal_floor_button, PIND ;serve como o controlador interno do elevador como o Igor comentou acima
-			nop
-		
-			cpi internal_floor_button, 0b00000001 
+
+		advancing_floor:
+			cpi internal_floor_button, 0b100001 
 			breq ground_floor
 	
-			cpi internal_floor_button, 0b00000010
+			cpi internal_floor_button, 0b100010
 			breq first_floor
 	
-			cpi internal_floor_button, 0b00000011
+			cpi internal_floor_button, 0b100100
 			breq second_floor
 	
-			cpi internal_floor_button, 0b00000100
+			cpi internal_floor_button, 0b101000
 			breq third_floor
 
+			out PORTD, internal_floor_button
+			
 	end:
 		rjmp internal_panel
 
@@ -128,44 +135,51 @@ OCI1A_Interrupt:
 	reti
 
 interruptions:
+	; [0|0|1|0|0|0|0|0] porta fechada
+	andi internal_floor_button, 0b101111 ; Do bitwise or between registers
+	bst internal_floor_button, 5
+	brts floor ; [0|0|0|1|0|0|0|0] porta aberta
+
+	alerts:
+			; [0|0|0|1|0|0|0|0] porta aberta 
+
+			buzzer:
+				cpi timer_aux, 0b00000101
+				breq on_buzzer
+	
+			led:
+				cpi timer_aux, 0b00001010
+				breq on_led
+
+		rjmp internal_panel
 
 	floor:
 		cpi timer_aux, 0b00001010
-		breq on_led
-		rjmp external_panel
+		breq advance_floor
 
-	cpi (internal_floor_button | 0b10000000), 0b10000000
-	brne internal_panel_buttons  
-
-	buzzer:
-		cpi timer_aux, 0b00000101
-		breq on_buzzer
+	rjmp internal_panel
+;Quando as condições de interrupção forem atingidas (relacionadas à abertura da porta do elevador) 
+on_buzzer:
+	subi temp, -1 ;seta o segundo bit menos significativo para 1 
+	out PORTB, temp ;liga o bit do buzzer na PORTB
+	cpi internal_floor_button, 0b100000 
+	breq off_buzzer ; Interrompe aqui para testar o fluxo do buzzer
+	rjmp end
 	
-	led:
-		cpi timer_aux, 0b00001010
-		breq on_led
+off_buzzer:
+	subi temp, 1 ;seta o segundo bit menos significativo para 0
+	out PORTB, temp ;desliga o bit do buzzer na PORTB
+	rjmp end
 
-	rjmp internal_panel_buttons
-
-buzzer_timer:
-	;Quando as condições de interrupção forem atingidas (relacionadas à abertura da porta do elevador) 
-	on_buzzer:
-		subi temp, -1 ;seta o segundo bit menos significativo para 1 
-		out PORTB, temp ;liga o bit do buzzer na PORTB
-		rjmp off_buzzer
+on_led:
+	subi temp, -2 ;seta o bit menos significativo para 1
+	out PORTB, temp ;liga o bit do led na PORTB
+	rjmp end ; Interrompe aqui para testar o fluxo do led
 	
-	off_buzzer:
-		subi temp, 1 ;seta o segundo bit menos significativo para 0
-		out PORTB, temp ;desliga o bit do buzzer na PORTB
-		rjmp end
-
-led_timer:
-	on_led:
-		subi temp, -2 ;seta o bit menos significativo para 1
-		out PORTB, temp ;liga o bit do led na PORTB
-		rjmp end
+off_led:
+	subi temp, 2 ;seta o bit menos significativo para 0
+	out PORTB, temp ;desliga o bit do led na PORTB
 	
-	off_led:
-		subi temp, 2 ;seta o bit menos significativo para 0
-		out PORTB, temp ;desliga o bit do led na PORTB
-	
+advance_floor:
+	bst internal_floor_button, 7
+	rjmp advancing_floor ; Interrompe aqui para testar o fluxo da mudança de andar
