@@ -17,6 +17,7 @@
 .def display_2 = r22 ;display de 7 segmentos interno
 .def timer_temp = r23 ;serve para setar o valor do TOP quando definimos o tempo de contagem
 .def timer_aux = r24 ;ajuda a contar cada 1ms que passa para conseguirmos interromper no momento adequado para cada interrupção
+.def aux = r25
 
 define_timer:
 	#define CLOCK 16.0e6
@@ -58,37 +59,73 @@ reset:
 
 		sei
 
+		;botões internos
+		;botões para abrir, fechar, escolher o terceiro, segundo, primeiro ou térreo são representados pelos bits 5 a 0 da porta PORTD de entrada
+		ldi internal_floor_button, 0x00
+		out DDRD, internal_floor_button;configura PORTD como entrada
+
+		external_panel:
+			;Aqui temos a representação do botão para chamar o elevador
+			;[0|0|0|0|0|0|0|0] cada casa da direita para a esquerda conta como um andar, logo, 
+
+			;[0|0|0|0|0|0|0|1] significa um chamado do térreo
+			;[0|0|0|0|0|0|1|0] significa um chamado do primeiro andar
+			;[0|0|0|0|0|1|0|0] significa um chamado do segundo andar
+			;[0|0|0|0|1|0|0|0] significa um chamado do terceiro andar
+
+			mov display_1, current_floor ;passando o valor do pavimento atual para o display de 7 segmentos do painel externo
+			nop
+			in external_button, PINC
+			nop
+
+			mov aux, external_button
+
+			andi aux, 0b00001000
+			bst aux, 3
+			brts third_floor
+
+			mov aux, external_button
+
+			andi aux, 0b00000100
+			bst aux, 2
+			brts second_floor
+
+			mov aux, external_button
+
+			andi aux, 0b00000010
+			bst aux, 1
+			brts first_floor
+
+			mov aux, external_button
+
+			andi aux, 0b00000001
+			bst aux, 0
+			brts ground_floor
+
+			rjmp external_panel
+
 	;apenas uma árvore de labels para cada andar, pensei em cada andar ser independente, mas isso pode mudar
 	ground_floor:
 		ldi current_floor, 0b00000001 ;seta o valor do registrador do andar atual
-		rjmp external_panel
+		bst external_button, 7
+		rjmp internal_panel
 
 	first_floor:
 		ldi current_floor, 0b00000010 ;seta o valor do registrador do andar atual
-		rjmp external_panel
+		bst external_button, 7
+		rjmp internal_panel
 
 	second_floor:
 		ldi current_floor, 0b00000011 ;seta o valor do registrador do andar atual
-		rjmp external_panel
+		bst external_button, 7
+		rjmp internal_panel
 
 	third_floor:
 		ldi current_floor, 0b00000110 ;seta o valor do registrador do andar atual
-		rjmp external_panel
+		bst external_button, 7
+		rjmp internal_panel
 
-	;botões internos
-	;botões para abrir, fechar, escolher o terceiro, segundo, primeiro ou térreo são representados pelos bits 5 a 0 da porta PORTD de entrada
-	ldi internal_floor_button, 0x00
-	out DDRD, internal_floor_button;configura PORTD como entrada
-
-	external_panel:
-		mov display_1, current_floor ;passando o valor do pavimento atual para o display de 7 segmentos do painel externo
-		nop
-		in external_button, PINC
-		nop
-		cpi external_button, 0b00000001
-		breq internal_panel
-
-		rjmp external_panel
+	
 
 	internal_panel:
 		;Aqui que colocamos o andar
@@ -142,7 +179,6 @@ interruptions:
 
 	alerts:
 			; [0|0|0|1|0|0|0|0] porta aberta 
-
 			buzzer:
 				cpi timer_aux, 0b00000101
 				breq on_buzzer
@@ -182,4 +218,5 @@ off_led:
 	
 advance_floor:
 	bst internal_floor_button, 7
+	nop
 	rjmp advancing_floor ; Interrompe aqui para testar o fluxo da mudança de andar
