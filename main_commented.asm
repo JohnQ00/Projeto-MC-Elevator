@@ -115,48 +115,60 @@ get_next_floor:
 		ret
 
 move_to_target:
-	
-	ldi count_timer, 2
-	rcall timer
 
+	; Aqui é feita a soma no contador de tempo, ou seja, quantas interrupções devem ser 
+	; contabilizadas para o programa ser interrompido
+	ldi count_timer, 2 
+	rcall timer ; Aqui é feita a chamada para o contador de tempo
+
+	; Position indica o andar que o elevador está e step indica se o elevador deve subir ou descer através de um bit
 	add position, step
+	; Após isso é comparado o valor do andar do elevador, position, com o andar que é alvo, target, 
+	; Caso não sejam os mesmos o loop continua, caso contrário, o fluxo de movimentação do elevador continua
 	cp position, target
 	brne move_to_target
 
+	; Agora que o elevador chegou no andar que deveria estar, as outras requisições externas e internas são checadas
+
+	; A variável control, que recebe o valor do bit mais significativo e é responsável 
+	; por ordenar as requisições por altura e entre externas e internas para o mesmo andar
 	mov temp, control
-; caso control = 01000000 e requests = 01000100	
-	lsr temp
-	lsr temp
-	lsr temp
-	lsr temp ; temp = 00000100
+	; Caso control = 01000000 e requests = 01000100, temos temp = 01000000
+	lsr temp ; => 00100000
+	lsr temp ; => 00010000
+	lsr temp ; => 00001000
+	lsr temp ; => 00000100
 
-	or control, temp ; control = 01000100
-	ldi temp, $FF
-	eor control, temp
-	;control = 10111011
+	; Quando fazemos o OR entre control e temp, temos novamente 
+	or control, temp ; control OR temp = 01000000 OR 00000100 = 01000100
+	ldi temp, $FF ; Adicionando em temp = 11111111
+	eor control, temp ; control EOR temp = 01000100 EOR 11111111 = 10111011
 
-	and requests, control ; requests = 00000000
+	and requests, control ; requests AND control = 01000100 AND 10111011 = 00000000
+	; Dessa forma, a gente confirma que todas as requisições foram atendidas em sua devida ordem
 
-	ldi state, 1
-	out PORTD, state ; light on, baby!
+	ldi state, 1 ; O registrador state é responsável por indicar se o LED e o buzzer estão ativos
+	out PORTD, state ; light on, baby! ; Aqui é transferido o valor de state para indicar que o LED está aceso
 	
-	ldi count_timer, 1
+	ldi count_timer, 1 ; Aqui o tempo de 5us deve ser contado, ou seja, deve-se entrar uma vez na interrupção para contar os 5us
 	rcall timer
 
-	cpi state, 0
+	cpi state, 0 ; Aqui ele checa se a porta aberta até os 5us foi fechada, se não for fechada, é acionado o buzzer
 	brne buzzing
 	rjmp main_loop
 
 	buzzing:
-		ldi state, 3
-		out PORTD, state
+		ldi state, 3 ; Em state é carregado o valor 3 (00000011) para indicar que o LED está aceso e o buzzer está soando
+		out PORTD, state ; É exibido nos pinos de saída valores para o LED e o buzzer ativos
 
-		ldi count_timer, 1
+		ldi count_timer, 1 ; Aqui é feita outra checagem de tempo, ou seja, se entrou mais uma vez na interrupção e foi contado
+		; mais 5 microssegundos significa que a porta deve ser fechada
 		rcall timer
 
-		ldi state, 0
-		out PORTD, state
-		rjmp main_loop
+		ldi state, 0 ; Como state carrega o estado da porta, ao colocarmos o valor 0 dizemos que a porta foi fechada 
+		; e consequentemente o buzzer e o LED foram desligados
+		out PORTD, state ; Aqui o registrador de estado da porta, LED e buzzer é exibido no pino de saída
+		rjmp main_loop ; Voltamos aqui para o loop principal, pois as requisições foram atendidas e o elevador está onde deve estar
 
 timer:
 	; On MEGA series, write high byte of 16-bit timer register first
