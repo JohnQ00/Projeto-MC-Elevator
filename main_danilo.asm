@@ -8,11 +8,25 @@
 .def target = r20 ; valor inteiro indicando o proximo andar de destino
 .def state = r21 ; contem as flags que indicam se o led e o buzzer estão ligados
 .def step = r22 ; indica se o elevador deve subir ou descer
+.def count_timer = r23
+
+;Configuracao do Timer
+#define CLOCK 32.0e6
+#define DELAY 5.0e-6 ; segundos (5us)
+.equ PRESCALE = 0b001 ; sem prescale
+.equ PRESCALE_DIV = 1
+.equ WGM = 0b0100
+.equ TOP = int(0.5 + ((CLOCK/PRESCALE_DIV)*DELAY))
+.if TOP > 65535
+.error "top IS OUT OF RANGE"
+.endif
 
 ;Interrupt Vector Table (IVT)
 jmp reset
 jmp close_door ; int0
 jmp request ; int1
+.org OC1Aaddr
+jmp timer_interrupt
 
 close_door:
 	ldi state, 0 ; Desliga o led e o buzzer
@@ -21,6 +35,18 @@ close_door:
 
 request:
 	in requests, PINB ; Carrega os botoes pressionados em requests
+	reti
+
+timer_interrupt:
+	push temp
+	in temp, SREG
+	push temp
+
+	subi count_timer, 1
+
+	pop temp
+	out SREG, temp
+	pop temp
 	reti
 
 reset:
@@ -40,38 +66,6 @@ reset:
 	; inicializa os dois bits menos significativos de PORTB como saída (Buzzer e Led)
 	ldi temp, $03
 	out DDRD, temp
-
-	;Configuracao do Timer
-	#define CLOCK 32.0e6
-	#define DELAY 5.0e-6 ; segundos (5us)
-	.equ PRESCALE = 0b001 ; sem prescale
-	.equ PRESCALE_DIV = 1
-	.equ WGM = 0b0100
-	.equ TOP = int(0.5 + ((CLOCK/PRESCALE_DIV)*DELAY))
-	.if TOP > 65535
-	.error "top IS OUT OF RANGE"
-	.endif
-
-	; On MEGA series, write high byte of 16-bit timer register first
-	ldi temp, high(TOP) ; initialize compare value (TOP)
-	sts OCR1AH, temp
-	ldi temp, low(TOP)
-	sts OCR1AL, temp
-	ldi temp, ((WGM&0b11) << WGM10) ; lower 2 bits of WGM
-	; WGM&0b11 = 0b0100 & 0b0011 = 0b0000
-	sts TCCR1A, temp
-	; upper 2 bits of WGM and clock select
-	ldi temp, ((WGM >> 2) << WGM12)|(PRESCALE << CS10)
-	; WGM >> 2 = 0b0100 >> 2 = 0b0001
-	; (WGM >> 2) << WGM12 = (0b0001 << 3) = 0b00001000
-	; (PRESCALE << CS10) = 0b100 << 0 = 0b100
-	; 0b00001000 | 0b100 = 0b00001100
-	sts TCCR1B, temp
-
-	; ativa a interrupção ligada a OCR1A
-;	lds r16, TIMSK1
-;	sbr r16, 1 <<OCIE1A
-;	sts TIMSK1, r16
 
 	;habilita a interrupção global
 	sei 
@@ -122,21 +116,22 @@ get_next_floor:
 
 move_to_target:
 	
-	;TIMER 
+	ldi count_timer, 2
+	rcall timer
 
 	add position, step
 	cp position, target
 	brne move_to_target
 
 	mov temp, control
-; caso control = 0100000 e requests = 01000100	
+; caso control = 01000000 e requests = 01000100	
 	lsr temp
 	lsr temp
 	lsr temp
 	lsr temp ; temp = 00000100
 
 	or control, temp ; control = 01000100
-	ldi temp, 0b11111111
+	ldi temp, $FF
 	eor control, temp
 	;control = 10111011
 
@@ -145,7 +140,8 @@ move_to_target:
 	ldi state, 1
 	out PORTD, state ; light on, baby!
 	
-	;TIMER
+	ldi count_timer, 1
+	rcall timer
 
 	cpi state, 0
 	brne buzzing
@@ -155,8 +151,36 @@ move_to_target:
 		ldi state, 3
 		out PORTD, state
 
-		;TIMER
+		ldi count_timer, 1
+		rcall timer
 
 		ldi state, 0
 		out PORTD, state
 		rjmp main_loop
+
+timer:
+	; On MEGA series, write high byte of 16-bit timer register first
+	ldi temp, high(TOP) ; initialize compare value (TOP)
+	sts OCR1AH, temp
+	ldi temp, low(TOP)
+	sts OCR1AL, temp
+	ldi temp, ((WGM&0b11) << WGM10) ; lower 2 bits of WGM
+	; WGM&0b11 = 0b0100 & 0b0011 = 0b0000
+	sts TCCR1A, temp
+	; upper 2 bits of WGM and clock select
+	ldi temp, ((WGM >> 2) << WGM12)|(PRESCALE << CS10)
+	; WGM >> 2 = 0b0100 >> 2 = 0b0001
+	; (WGM >> 2) << WGM12 = (0b0001 << 3) = 0b00001000
+	; (PRESCALE << CS10) = 0b100 << 0 = 0b100
+	; 0b00001000 | 0b100 = 0b00001100
+	sts TCCR1B, temp
+
+	; ativa a interrupção ligada a OCR1A
+	lds temp, TIMSK1
+	sbr temp, 1 << OCIE1A
+	sts TIMSK1, temp
+
+	cpi count_timer, 0
+	brne timer
+
+	ret		
