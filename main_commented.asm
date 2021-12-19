@@ -8,11 +8,11 @@
 .def target = r20 ; valor inteiro indicando o proximo andar de destino
 .def state = r21 ; contem as flags que indicam se o led e o buzzer estão ligados
 .def step = r22 ; indica se o elevador deve subir ou descer
-.def count_timer = r23 ; auxilia na identificação da passagem de 5 ou 10 ms para ocorrência de algum evento, como o acionamento do buzzer 
+.def count_timer = r23 ; auxilia na identificação da passagem de 5 ou 10 us (microssegundos) para ocorrência de algum evento, como o acionamento do buzzer 
 
 ;Configuracao do Timer
 #define CLOCK 32.0e6
-#define DELAY 5.0e-6 ; segundos (5us)
+#define DELAY 5.0e-6 ; 5 microssegundos (5us)
 .equ PRESCALE = 0b001 ; sem prescale
 .equ PRESCALE_DIV = 1
 .equ WGM = 0b0100
@@ -42,7 +42,7 @@ timer_interrupt:
 	in temp, SREG
 	push temp
 
-	subi count_timer, 1 ; decrementa 1 em count_timer para indicar ,por meio da entrada na interrupção, a passagem de 1 ms
+	subi count_timer, 1 ; decrementa 1 em count_timer para indicar ,por meio da entrada na interrupção, a passagem de 5 us (microssegundos)
 
 	pop temp
 	out SREG, temp
