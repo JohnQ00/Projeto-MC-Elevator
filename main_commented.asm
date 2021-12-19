@@ -114,7 +114,7 @@ get_next_floor:
 	ret
 
 	sub4:
-		subi target, 4 ; No EXEMPLO: target-4 = 7-4 = 00000100
+		subi target, 4 ; No EXEMPLO: target-4 = 7-4 = 00000011
 		ret
 
 move_to_target:
