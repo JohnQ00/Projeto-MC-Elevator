@@ -94,7 +94,7 @@ go_next_floor:
 
 get_next_floor:
 	mov temp, requests ;No EXEMPLO: temp = requests = 01000000
-	; temp AND control = 01000000 AND 10000000
+	;No EXEMPLO: temp AND control = 01000000 AND 10000000
 	and temp, control ; Detecta os bits setados em 1 em 'requests' da esquerda para a direita usando 'control' como indicador usando 'and' 
 	
 	; No EXEMPLO: control >> 1 = 0100000
