@@ -77,9 +77,7 @@ main_loop:
 
 go_next_floor:
 	ldi control, 0b10000000 ; inicia a variável de busca de requisições com o bit mais significativo em 1 para atender requisições na ordem de prioridade de chamada 
-	ldi target, 8 ; Target recebe um valor decimal, ou seja, target = 00001000, que representa o bit mais significativo.
-	; Onde 1000 representa o valor de cada botão ao ser dividido pela metade.
-	; target = 00000000 => 0000 (0000) = requisições => (00) = externas (00) = internas com cada uma podendo valer até 4.
+	ldi target, 8 ; Target recebe um valor decimal 8, para ser utilizado no loop da função get_next_floor
 	rcall get_next_floor 
 
 	; Agora que a entrada foi tratada
