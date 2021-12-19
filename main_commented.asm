@@ -8,11 +8,11 @@
 .def target = r20 ; valor inteiro indicando o proximo andar de destino
 .def state = r21 ; contem as flags que indicam se o led e o buzzer estão ligados
 .def step = r22 ; indica se o elevador deve subir ou descer
-.def count_timer = r23 ; auxilia na identificação da passagem de 5 ou 10 ms para ocorrência de algum evento, como o acionamento do buzzer 
+.def count_timer = r23 ; auxilia na identificação da passagem de 5 ou 10 us (microssegundos) para ocorrência de algum evento, como o acionamento do buzzer 
 
 ;Configuracao do Timer
 #define CLOCK 32.0e6
-#define DELAY 5.0e-6 ; segundos (5us)
+#define DELAY 5.0e-6 ; 5 microssegundos (5us)
 .equ PRESCALE = 0b001 ; sem prescale
 .equ PRESCALE_DIV = 1
 .equ WGM = 0b0100
@@ -42,7 +42,7 @@ timer_interrupt:
 	in temp, SREG
 	push temp
 
-	subi count_timer, 1 ; decrementa 1 em count_timer para indicar ,por meio da entrada na interrupção, a passagem de 1 ms
+	subi count_timer, 1 ; decrementa 1 em count_timer para indicar ,por meio da entrada na interrupção, a passagem de 5us (microssegundos)
 
 	pop temp
 	out SREG, temp
@@ -84,9 +84,9 @@ go_next_floor:
 
 	; Agora que a entrada foi tratada
 	ldi step, 1 ; Step representa o sentido que o elevador irá tomar, step > 0, elevador sobe, step < 0, elevador desce
-	mov temp, target ; Aqui temp = target = 00000100
-	sub temp, position ; temp - position = 00000100 - 00000000 = 00000100 
-	brmi down ; Se o resultado for negativo, nos movemos para down, que trata de descidas
+	mov temp, target ; No EXEMPLO: temp = target = 00000100
+	sub temp, position ; No EXEMPLO: temp-position = 00000100-00000000 = 00000100
+	brmi down ; Se o resultado for negativo, nos movemos para down, que trata das descidas
 
 	rjmp move_to_target
 
@@ -95,13 +95,13 @@ go_next_floor:
 		rjmp move_to_target
 
 get_next_floor:
-	mov temp, requests ; Aqui temos temp = requests = 01000000
+	mov temp, requests ;No EXEMPLO: temp = requests = 01000000
 	; temp AND control = 01000000 AND 10000000
 	and temp, control ; Detecta os bits setados em 1 em 'requests' da esquerda para a direita usando 'control' como indicador usando 'and' 
 	
-	; Nessa linha, control >> 1 = 0100000
+	; No EXEMPLO: control >> 1 = 0100000
 	lsr control ; Desloca um bit de 'control' para a direita
-	; E aqui target - 1 = 8 - 1
+	;No EXEMPLO: target-1 = 8-1
 	dec target ; Decrementa 1 em 'target' para indicar que não havia requisição em determinado bit
 	
 	cpi temp, 0 ; Verifica se o bit indicado em 'control' coincide com alguma requisição após a operação de 'and' com requests
@@ -109,14 +109,14 @@ get_next_floor:
   
 	lsl control ; Shift bit de 1 bit para a esquerda para retornar à requisição
 
-	mov temp, target ; Salva o andar do 'target' em 'temp', logo, temp = target = 7 = 00000111
-	andi temp, 0b00001100 ; Realizamos a operação temp AND 00001100 = 00000111 AND 00001100 = 00000100
+	mov temp, target ; Salva o andar do 'target' em 'temp'. No EXEMPLO: temp = target = 7 = 00000111
+	andi temp, 0b00001100 ; No EXEMPLO: Realizamos a operação (temp AND 00001100) = (00000111 AND 00001100) = 00000100
 	cpi temp, 0 ; Checa se temp é 00000000, como temp é 00000100 a comparação retorna como diferentes
 	brne sub4 ; Se não forem iguais, move para sub4
 	ret
 
 	sub4:
-		subi target, 4 ; target - 4 = 7 - 4 = 00000100
+		subi target, 4 ; No EXEMPLO: target-4 = 7-4 = 00000100
 		ret
 
 move_to_target:
