@@ -77,41 +77,47 @@ main_loop:
 
 go_next_floor:
 	ldi control, 0b10000000 ; inicia a variável de busca de requisições com o bit mais significativo em 1 para atender requisições na ordem de prioridade de chamada 
-	ldi target, 8
+	ldi target, 8 ; Target recebe um valor decimal, ou seja, target = 00001000, que representa o bit mais significativo.
+	; Onde 1000 representa o valor de cada botão ao ser dividido pela metade.
+	; target = 00000000 => 0000 (0000) = requisições => (00) = externas (00) = internas com cada uma podendo valer até 4.
 	rcall get_next_floor 
 
-	ldi step, 1
-	mov temp, target
-	sub temp, position
-	tst temp
-	breq down
+	; Agora que a entrada foi tratada
+	ldi step, 1 ; Step representa o sentido que o elevador irá tomar, step > 0, elevador sobe, step < 0, elevador desce
+	mov temp, target ; Aqui temp = target = 00000100
+	sub temp, position ; temp - position = 00000100 - 00000000 = 00000100 
+	tst temp ; Checa se o valor de temp é 0 ou negativo
+	breq down ; Se for, nos movemos para down, que trata de descidas
 
 	rjmp move_to_target
 
 	down:
-		neg step
+		neg step ; Negativa o passo que tem que ser dado
 		rjmp move_to_target
 
 get_next_floor:
-	mov temp, requests
-	and temp, control ; detecta os bits setados em 1 em 'requests' da esquerda para a direita usando 'control' como indicador usando 'and' 
-
-	lsr control ; desloca um bit de 'control' para a direita
-	dec target ; decrementa 1 em 'target' para indicar que não havia requisição em determinado bit
+	mov temp, requests ; Aqui temos temp = requests = 01000000
+	; temp AND control = 01000000 AND 10000000
+	and temp, control ; Detecta os bits setados em 1 em 'requests' da esquerda para a direita usando 'control' como indicador usando 'and' 
 	
-	cpi temp, 0 ; verifica se o bit indicado em 'control' coincide com alguma requisição após a operação de 'and' com requests
-	breq get_next_floor ; volta para get_next_floor para procurar a requisição a ser atendida. Caso contrário, prossegue com a execução da requisição.
+	; Nessa linha, control >> 1 = 0100000
+	lsr control ; Desloca um bit de 'control' para a direita
+	; E aqui target - 1 = 8 - 1
+	dec target ; Decrementa 1 em 'target' para indicar que não havia requisição em determinado bit
+	
+	cpi temp, 0 ; Verifica se o bit indicado em 'control' coincide com alguma requisição após a operação de 'and' com requests
+	breq get_next_floor ; Volta para get_next_floor para procurar a requisição a ser atendida. Caso contrário, prossegue com a execução da requisição.
   
-	lsl control ; shift bit de 1 bit para a esquerda para retornar à requisição
+	lsl control ; Shift bit de 1 bit para a esquerda para retornar à requisição
 
-	mov temp, target ; salva o andar do 'target' em 'temp'
-	andi temp, 0b00001100 ; CONFUSO SOBRE ISSO, PQ ESSE NUMERO
-	cpi temp, 0
-	brne sub4
+	mov temp, target ; Salva o andar do 'target' em 'temp', logo, temp = target = 7 = 00000111
+	andi temp, 0b00001100 ; Realizamos a operação temp AND 00001100 = 00000111 AND 00001100 = 00000100
+	cpi temp, 0 ; Checa se temp é 00000000, como temp é 00000100 a comparação retorna como diferentes
+	brne sub4 ; Se não forem iguais, move para sub4
 	ret
 
 	sub4:
-		subi target, 4
+		subi target, 4 ; target - 4 = 7 - 4 = 00000100
 		ret
 
 move_to_target:
@@ -122,10 +128,10 @@ move_to_target:
 	rcall timer ; Aqui é feita a chamada para o contador de tempo
 
 	; Position indica o andar que o elevador está e step indica se o elevador deve subir ou descer através de um bit
-	add position, step
+	add position, step ; position + step = 00000000 + 00000001 = 00000001
 	; Após isso é comparado o valor do andar do elevador, position, com o andar que é alvo, target, 
 	; Caso não sejam os mesmos o loop continua, caso contrário, o fluxo de movimentação do elevador continua
-	cp position, target
+	cp position, target ; É comparado com o andar que é alvo e se mantém em loop até chegar nele
 	brne move_to_target
 
 	; Agora que o elevador chegou no andar que deveria estar, as outras requisições externas e internas são checadas
